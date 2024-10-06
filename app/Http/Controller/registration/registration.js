@@ -25,7 +25,9 @@ registration_obj.registration=async (req,res)=>{
     requiredFields.password = inputData.password;
     requiredFields.mobile = inputData.mobile;
     requiredFields.address = inputData.address;
-    requiredFields.profile_url = req.files[0].path;
+    if(req.files && req.files[0]){
+      requiredFields.profile_url = req.files[0].path;
+    }
     requiredFields.app_name = req.headers['x-application-name'];
     //check valid exist or not
     var checkData = await isValid.checkProperties(requiredFields);
@@ -47,16 +49,18 @@ registration_obj.registration=async (req,res)=>{
     let lname = inputData.lname.trim();
     let address = inputData.address.trim();
     let plainPassword = inputData.password.trim();
-    const fileContent = fs.readFileSync(requiredFields.profile_url);
-    const base64Image = fileContent.toString('base64');
     let app_name = requiredFields.app_name;
-    fs.unlink(requiredFields.profile_url , (err)=>{
-      if (err) {
-        console.log("--- Error deleting file ---", err.message);  // Log error message if file deletion fails
-      } else {
-        console.log("--- File deleted successfully ---");  // Log success message
-      }
-    })
+    if(req.files && req.files[0]){
+      const fileContent = fs.readFileSync(requiredFields.profile_url);
+      var base64Image = fileContent.toString('base64');
+      fs.unlink(requiredFields.profile_url , (err)=>{
+        if (err) {
+          console.log("--- Error deleting file ---", err.message);  // Log error message if file deletion fails
+        } else {
+          console.log("--- File deleted successfully ---");  // Log success message
+        }
+      })
+    }
     let check_user_exist = await customFunction.checkExistingUser(email,mobile,app_name);
     if(check_user_exist.status == true){
       result.message = "Executed Sucessfully";
@@ -105,21 +109,24 @@ registration_obj.registration=async (req,res)=>{
     if(dataToSql.value.insertId){
       uid = dataToSql.value.insertId; 
     }
-    let imageDataObj = {};
-    imageDataObj.reference_id = uid;
-    imageDataObj.flag_type  = "PROFILE";
-    imageDataObj.image_data = base64Image;
-    let profile_url_mongo_id = await customFunction.saveImageInMongo(imageDataObj);
-    if(profile_url_mongo_id.status == false){
-      result.error_key = "IMAGE_NOT_UPLOAD_IN_MONGO";
-      result.statusCode = 400;
-      result.message = "Image not upload in  mongo";
-      result.status = false;
-      return result;
+    let profile_url_mongo_id = {};
+    if(req.files && req.files[0]){
+      let imageDataObj = {};
+      imageDataObj.reference_id = uid;
+      imageDataObj.flag_type  = "PROFILE";
+      imageDataObj.image_data = base64Image;
+      profile_url_mongo_id = await customFunction.saveImageInMongo(imageDataObj);
+      if(profile_url_mongo_id.status == false){
+        result.error_key = "IMAGE_NOT_UPLOAD_IN_MONGO";
+        result.statusCode = 400;
+        result.message = "Image not upload in  mongo";
+        result.status = false;
+        return result;
+      }
     }
     // insert data into laf_users_info table
     let reqInfoField = ["uid","fname", "lname","mobile","address","profile_url","created"];
-    let reqInfoData = [uid,`'${fname}'`,`'${lname}'`,`'${mobile}'`,`'${address}'`,`'${profile_url_mongo_id.value.toString()}'`,`'${currenttime}'`];
+    let reqInfoData = [uid,`'${fname}'`,`'${lname}'`,`'${mobile}'`,`'${address}'`,`'${profile_url_mongo_id && profile_url_mongo_id?.value  ? profile_url_mongo_id.value.toString() : 0}'`,`'${currenttime}'`];
     var dataToSqlInfo = await mysqlSelect.insertgeneralQuery("laf_users_info", reqInfoField, reqInfoData);
     if (dataToSqlInfo.status == false) {
       result.error_key = "NOT_GENERATE_UID_laf_users_info";
