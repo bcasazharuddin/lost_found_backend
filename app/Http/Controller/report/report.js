@@ -23,7 +23,9 @@ report_obj.report = async (req,res)=>{
     requiredFields.description = inputData.description;
     requiredFields.location = inputData.location;
     requiredFields.post_type = inputData.post_type;
-    requiredFields.image_url = req.files[0].path;
+    if(req.files && req.files[0]){
+      requiredFields.image_url = req.files[0].path;
+    }
     requiredFields.remarks = inputData.remarks;
     //check valid exist or not
     var checkData = await isValid.checkProperties(requiredFields);
@@ -46,33 +48,38 @@ report_obj.report = async (req,res)=>{
     let description = inputData.description.trim();
     let location = inputData.location.trim();
     let post_type = inputData.post_type.trim();
-    const fileContent = fs.readFileSync(requiredFields.image_url);
-    const base64Image = fileContent.toString('base64');
-    // let image_url = base64Image;
-    fs.unlink(requiredFields.image_url , (err)=>{
-      if (err) {
-        console.log("--- Error deleting file ---", err.message);  // Log error message if file deletion fails
-      } else {
-        console.log("--- File deleted successfully ---");  // Log success message
-      }
-    })
+    if(req.files && req.files[0]){
+      const fileContent = fs.readFileSync(requiredFields.image_url);
+      var base64Image = fileContent.toString('base64');
+      // let image_url = base64Image;
+      fs.unlink(requiredFields.image_url , (err)=>{
+        if (err) {
+          console.log("--- Error deleting file ---", err.message);  // Log error message if file deletion fails
+        } else {
+          console.log("--- File deleted successfully ---");  // Log success message
+        }
+      })
+    }
     let remarks = inputData.remarks.trim();
     let currenttime = await timeFunction.getCurrentUnixtime()
+    let profile_url_mongo_id = {};
+    if(req.files && req.files[0]){
     let imageDataObj = {};
-    imageDataObj.reference_id = uid;
-    imageDataObj.flag_type  = post_type == 1 ? "LOST_IMAGE" : (post_type == 2 ? "FOUND" : '');
-    imageDataObj.image_data = base64Image;
-    let profile_url_mongo_id = await customFunction.saveImageInMongo(imageDataObj);
-    if(profile_url_mongo_id.status == false){
-      result.error_key = "IMAGE_NOT_UPLOAD_IN_MONGO";
-      result.statusCode = 400;
-      result.message = "Image not upload in  mongo";
-      result.status = false;
-      return result;
+      imageDataObj.reference_id = uid;
+      imageDataObj.flag_type  = post_type == 1 ? "LOST_IMAGE" : (post_type == 2 ? "FOUND" : '');
+      imageDataObj.image_data = base64Image;
+      profile_url_mongo_id = await customFunction.saveImageInMongo(imageDataObj);
+      if(profile_url_mongo_id.status == false){
+        result.error_key = "IMAGE_NOT_UPLOAD_IN_MONGO";
+        result.statusCode = 400;
+        result.message = "Image not upload in  mongo";
+        result.status = false;
+        return result;
+      }
     }
     // insert data into laf_report_form table
     let reqField = ["uid", "post_category","title","report_time","description","location","post_type","report_image_url","remarks","created","created_by"];
-    let reqData = [`${uid}`,`'${post_category}'`,`'${title}'`,`'${report_time}'`,`'${description}'`,`'${location}'`,`'${post_type}'`,`'${profile_url_mongo_id.value.toString()}'`,`'${remarks}'`,`'${currenttime}'`,`${uid}`];
+    let reqData = [`${uid}`,`'${post_category}'`,`'${title}'`,`'${report_time}'`,`'${description}'`,`'${location}'`,`'${post_type}'`,`'${profile_url_mongo_id && profile_url_mongo_id?.value  ? profile_url_mongo_id.value.toString() : 0}'`,`'${remarks}'`,`'${currenttime}'`,`${uid}`];
     var dataToSql = await mysqlSelect.insertgeneralQuery("laf_report_form", reqField, reqData);
     if (dataToSql.status == false) {
         result.error_key = "NOT_GENERATE_UID_laf_users";
